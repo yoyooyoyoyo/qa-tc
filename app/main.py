@@ -6,7 +6,9 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from app.core.extractor import extract_requirements_from_text
 from app.core.parser import parse_file
+from app.schemas.requirement import ExtractRequirementsResponse
 
 app = FastAPI(title="QA TC Agent")
 
@@ -98,3 +100,74 @@ def parse_local_file(filename: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Parse failed: {exc}") from exc
+
+
+@app.post(
+    "/extract-requirements",
+    response_model=ExtractRequirementsResponse,
+)
+async def upload_and_extract_requirements(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is missing.")
+
+    extension = Path(file.filename).suffix.lower()
+    saved_name = f"{uuid4().hex}{extension}"
+    saved_path = INPUT_DIR / saved_name
+
+    try:
+        with saved_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        parsed_text = parse_file(saved_path)
+        requirements = extract_requirements_from_text(parsed_text)
+
+        return ExtractRequirementsResponse(
+            message="File uploaded, parsed, and requirements extracted successfully",
+            filename=file.filename,
+            text_length=len(parsed_text),
+            requirement_count=len(requirements),
+            requirements=requirements,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Requirement extraction failed: {exc}",
+        ) from exc
+    finally:
+        file.file.close()
+
+
+@app.get(
+    "/extract-requirements-local",
+    response_model=ExtractRequirementsResponse,
+)
+def extract_requirements_local(filename: str):
+    target_path = INPUT_DIR / filename
+
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    try:
+        parsed_text = parse_file(target_path)
+        requirements = extract_requirements_from_text(parsed_text)
+
+        return ExtractRequirementsResponse(
+            message="Local file parsed and requirements extracted successfully",
+            filename=filename,
+            text_length=len(parsed_text),
+            requirement_count=len(requirements),
+            requirements=requirements,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Requirement extraction failed: {exc}",
+        ) from exc
