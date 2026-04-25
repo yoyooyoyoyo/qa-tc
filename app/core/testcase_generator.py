@@ -5,7 +5,9 @@ import re
 from typing import Any
 
 from app.core.llm_client import BaseLLMClient, get_llm_client
+from app.core.quality import improve_testcase_quality
 from app.prompts.testcase_prompt import build_testcase_generation_prompt
+from app.schemas.analysis import RequirementAnalysisResult
 from app.schemas.requirement import Requirement
 from app.schemas.testcase import TestCase
 
@@ -13,13 +15,18 @@ from app.schemas.testcase import TestCase
 def generate_testcases_from_requirements(
     requirements: list[Requirement],
     perspectives: list[str] | None = None,
+    analysis: RequirementAnalysisResult | None = None,
     llm_client: BaseLLMClient | None = None,
 ) -> list[TestCase]:
     if not requirements:
         raise ValueError("requirements is required.")
 
     selected_perspectives = perspectives or ["PM", "DEV", "QA"]
-    prompt = build_testcase_generation_prompt(requirements, selected_perspectives)
+    prompt = build_testcase_generation_prompt(
+        requirements,
+        selected_perspectives,
+        analysis=analysis,
+    )
 
     client = llm_client or get_llm_client()
     raw_output = client.generate_testcases(
@@ -29,7 +36,8 @@ def generate_testcases_from_requirements(
     )
 
     raw_items = _normalize_llm_output(raw_output)
-    return [TestCase.model_validate(item) for item in raw_items]
+    testcases = [TestCase.model_validate(item) for item in raw_items]
+    return improve_testcase_quality(testcases, requirements)
 
 
 def _normalize_llm_output(raw_output: Any) -> list[dict[str, Any]]:

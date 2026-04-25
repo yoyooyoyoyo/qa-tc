@@ -15,6 +15,9 @@ class Requirement(BaseModel):
     dependencies: list[str] = Field(default_factory=list, description="의존 요소")
     open_questions: list[str] = Field(default_factory=list, description="확인 필요 사항")
     source_section: str = Field(default="", description="원문 내 섹션명")
+    source_quote: str = Field(default="", description="요구사항 근거가 되는 원문 인용")
+    confidence: float = Field(default=0.0, description="요구사항 추출 신뢰도")
+    evidence: list[str] = Field(default_factory=list, description="요구사항 근거 목록")
 
 
 class RequirementExtractionResult(BaseModel):

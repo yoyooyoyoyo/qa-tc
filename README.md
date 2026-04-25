@@ -31,7 +31,10 @@ Swagger에서 파일 또는 텍스트를 넣으면 테스트케이스 생성 전
       "states": ["예약가능", "예약불가"],
       "dependencies": ["병원 목록 조회 API"],
       "open_questions": [],
-      "source_section": "3.2 병원 리스트"
+      "source_section": "3.2 병원 리스트",
+      "source_quote": "예약 가능 병원만 노출",
+      "confidence": 0.92,
+      "evidence": ["예약 가능 병원만 노출"]
     }
   ]
 }
@@ -54,7 +57,7 @@ Swagger: `http://127.0.0.1:8000/docs`
 
 `POST /generate-testcases`
 
-`/extract-requirements` 응답의 `requirements` 배열을 넣으면 PM/DEV/QA 관점 테스트케이스를 생성한다.
+`/extract-requirements` 응답의 `requirements` 배열을 넣으면 PM/DEV/QA 분석 후 테스트케이스를 생성한다.
 
 ```json
 {
@@ -70,12 +73,26 @@ Swagger: `http://127.0.0.1:8000/docs`
       "states": ["성공", "실패"],
       "dependencies": ["로그인 API"],
       "open_questions": [],
-      "source_section": "로그인"
+      "source_section": "로그인",
+      "source_quote": "이메일과 비밀번호로 로그인 가능",
+      "confidence": 0.9,
+      "evidence": ["이메일과 비밀번호로 로그인 가능"]
     }
   ],
   "perspectives": ["PM", "DEV", "QA"]
 }
 ```
+
+응답에는 `analysis`와 확장된 테스트케이스 필드가 포함된다.
+
+- `analysis`: PM/DEV/QA별 findings, risks, open_questions
+- `category`: 정상/예외/경계값/권한/상태전이/API/회귀 등 테스트 분류
+- `severity`: Critical, Major, Minor 등 영향도
+- `automation_candidate`: 자동화 후보 여부
+- `related_risks`: 관련 리스크
+- `traceability`: 요구사항/근거 연결
+- `source_quote`: 테스트케이스 근거 원문
+- `quality_warnings`: 후처리 품질 경고
 
 ## Export APIs
 
@@ -84,11 +101,19 @@ Swagger: `http://127.0.0.1:8000/docs`
 
 `/generate-testcases` 응답의 `testcases` 배열을 그대로 넣으면 된다.
 
+Excel 파일은 QA 진행용 양식으로 생성된다.
+
+| no. | title | 테스트 진행 화면 | precondition | steps | expected result | test-result | comment | issue ticket |
+|---|---|---|---|---|---|---|---|---|
+
+- `test-result`는 `pass`, `fail`, `blocked`, `fixed` 드롭다운이다.
+- `comment`와 `issue ticket`은 QA 진행 중 작성할 수 있도록 빈 값으로 생성된다.
+
 ## End-to-end APIs
 
 `POST /generate-testcases-from-document`
 
-기획서 파일 또는 텍스트를 넣으면 요구사항 추출과 테스트케이스 생성을 한 번에 수행한다.
+기획서 파일 또는 텍스트를 넣으면 요구사항 추출, PM/DEV/QA 분석, 테스트케이스 생성을 한 번에 수행한다.
 
 - `file`: txt, md, pdf, docx, xlsx, xls 기획서 파일
 - `text`: 파일 대신 바로 분석할 기획서 텍스트
@@ -96,8 +121,8 @@ Swagger: `http://127.0.0.1:8000/docs`
 
 `POST /export-testcases-from-document-tsv`
 
-기획서 파일 또는 텍스트를 넣으면 요구사항 추출, 테스트케이스 생성 후 TSV 파일을 바로 다운로드한다.
+기획서 파일 또는 텍스트를 넣으면 요구사항 추출, PM/DEV/QA 분석, 테스트케이스 생성 후 TSV 파일을 바로 다운로드한다.
 
 `POST /export-testcases-from-document-xlsx`
 
-기획서 파일 또는 텍스트를 넣으면 요구사항 추출, 테스트케이스 생성 후 Excel 파일을 바로 다운로드한다.
+기획서 파일 또는 텍스트를 넣으면 요구사항 추출, PM/DEV/QA 분석, 테스트케이스 생성 후 Excel 파일을 바로 다운로드한다.

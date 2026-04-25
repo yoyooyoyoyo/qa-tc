@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.schemas.requirement import Requirement
+from app.schemas.analysis import RequirementAnalysisResult
 
 
 class TestCase(BaseModel):
@@ -12,11 +13,19 @@ class TestCase(BaseModel):
     priority: str = Field(..., description="우선순위: High, Medium, Low")
     test_type: str = Field(..., description="테스트 유형")
     title: str = Field(..., description="테스트 제목")
+    test_screen: str = Field(default="", description="테스트 진행 화면")
     preconditions: list[str] = Field(default_factory=list, description="사전 조건")
     steps: list[str] = Field(default_factory=list, description="테스트 절차")
     test_data: str = Field(default="", description="테스트 데이터")
     expected_result: str = Field(..., description="기대 결과")
     notes: str = Field(default="", description="비고")
+    category: str = Field(default="Functional", description="정상/예외/경계값/권한/상태전이/API/회귀 등")
+    severity: str = Field(default="Medium", description="장애 영향도: Critical, Major, Minor")
+    automation_candidate: bool = Field(default=False, description="자동화 후보 여부")
+    related_risks: list[str] = Field(default_factory=list, description="관련 리스크")
+    traceability: list[str] = Field(default_factory=list, description="요구사항/정책 근거")
+    source_quote: str = Field(default="", description="테스트케이스 근거 원문")
+    quality_warnings: list[str] = Field(default_factory=list, description="후처리 품질 경고")
 
 
 class TestCaseGenerationRequest(BaseModel):
@@ -35,6 +44,7 @@ class GenerateTestCasesResponse(BaseModel):
     message: str
     requirement_count: int
     testcase_count: int
+    analysis: RequirementAnalysisResult = Field(default_factory=RequirementAnalysisResult)
     testcases: list[TestCase]
 
 
@@ -44,6 +54,7 @@ class GenerateTestCasesFromDocumentResponse(BaseModel):
     text_length: int
     requirement_count: int
     testcase_count: int
+    analysis: RequirementAnalysisResult = Field(default_factory=RequirementAnalysisResult)
     requirements: list[Requirement]
     testcases: list[TestCase]
 

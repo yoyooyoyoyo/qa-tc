@@ -13,7 +13,8 @@ def build_requirement_extraction_prompt(document_text: str) -> str:
 3. 테스트케이스 작성에 필요한 사전조건과 의존 요소를 정리한다.
 4. 문서에 없는 추정은 금지한다.
 5. 애매한 부분은 open_questions로 분리한다.
-6. 반드시 JSON만 반환한다. 설명 문장은 쓰지 않는다.
+6. 각 요구사항마다 source_quote, evidence, confidence를 반드시 채운다.
+7. 반드시 JSON만 반환한다. 설명 문장은 쓰지 않는다.
 
 반드시 아래 스키마의 JSON 배열 또는 JSON 객체로 응답하라.
 
@@ -30,7 +31,10 @@ def build_requirement_extraction_prompt(document_text: str) -> str:
     "states": ["예약가능", "예약불가"],
     "dependencies": ["병원 목록 조회 API"],
     "open_questions": [],
-    "source_section": "3.2 병원 리스트"
+    "source_section": "3.2 병원 리스트",
+    "source_quote": "예약 가능 병원만 노출",
+    "confidence": 0.92,
+    "evidence": ["예약 가능 병원만 노출", "병원 목록 조회 API"]
   }}
 ]
 
@@ -48,7 +52,10 @@ def build_requirement_extraction_prompt(document_text: str) -> str:
       "states": ["예약가능", "예약불가"],
       "dependencies": ["병원 목록 조회 API"],
       "open_questions": [],
-      "source_section": "3.2 병원 리스트"
+      "source_section": "3.2 병원 리스트",
+      "source_quote": "예약 가능 병원만 노출",
+      "confidence": 0.92,
+      "evidence": ["예약 가능 병원만 노출", "병원 목록 조회 API"]
     }}
   ]
 }}

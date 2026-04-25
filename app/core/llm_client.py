@@ -7,12 +7,22 @@ from typing import Any
 
 import requests
 
+from app.schemas.analysis import RequirementAnalysisResult
 from app.schemas.requirement import Requirement
 
 
 class BaseLLMClient(ABC):
     @abstractmethod
     def extract_requirements(self, *, document_text: str, prompt: str) -> Any:
+        raise NotImplementedError
+
+    @abstractmethod
+    def analyze_requirements(
+        self,
+        *,
+        requirements: list[Requirement],
+        prompt: str,
+    ) -> Any:
         raise NotImplementedError
 
     @abstractmethod
@@ -34,6 +44,14 @@ class MockLLMClient(BaseLLMClient):
 
     def extract_requirements(self, *, document_text: str, prompt: str) -> Any:
         return _rule_based_requirement_extraction(document_text)
+
+    def analyze_requirements(
+        self,
+        *,
+        requirements: list[Requirement],
+        prompt: str,
+    ) -> Any:
+        return _rule_based_requirement_analysis(requirements)
 
     def generate_testcases(
         self,
@@ -57,6 +75,17 @@ class ExternalLLMClient(BaseLLMClient):
         self.model = os.getenv("LLM_MODEL", "")
 
     def extract_requirements(self, *, document_text: str, prompt: str) -> Any:
+        raise NotImplementedError(
+            "ExternalLLMClient is a skeleton only. "
+            "Replace this method with your actual LLM SDK/API call."
+        )
+
+    def analyze_requirements(
+        self,
+        *,
+        requirements: list[Requirement],
+        prompt: str,
+    ) -> Any:
         raise NotImplementedError(
             "ExternalLLMClient is a skeleton only. "
             "Replace this method with your actual LLM SDK/API call."
@@ -109,6 +138,47 @@ class OpenAILLMClient(BaseLLMClient):
                     "name": "requirement_extraction_result",
                     "strict": True,
                     "schema": REQUIREMENT_EXTRACTION_JSON_SCHEMA,
+                }
+            },
+        }
+
+        response = requests.post(
+            f"{self.base_url.rstrip('/')}/responses",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+
+        return _extract_response_text(response.json())
+
+    def analyze_requirements(
+        self,
+        *,
+        requirements: list[Requirement],
+        prompt: str,
+    ) -> Any:
+        payload = {
+            "model": self.model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": (
+                        "너는 PM, DEV, QA 관점으로 요구사항을 검토하는 리뷰어다. "
+                        "반드시 JSON 스키마를 준수한다."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "requirement_analysis_result",
+                    "strict": True,
+                    "schema": REQUIREMENT_ANALYSIS_JSON_SCHEMA,
                 }
             },
         }
@@ -205,6 +275,9 @@ REQUIREMENT_EXTRACTION_JSON_SCHEMA: dict[str, Any] = {
                     "dependencies": {"type": "array", "items": {"type": "string"}},
                     "open_questions": {"type": "array", "items": {"type": "string"}},
                     "source_section": {"type": "string"},
+                    "source_quote": {"type": "string"},
+                    "confidence": {"type": "number"},
+                    "evidence": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": [
                     "feature_id",
@@ -218,11 +291,40 @@ REQUIREMENT_EXTRACTION_JSON_SCHEMA: dict[str, Any] = {
                     "dependencies",
                     "open_questions",
                     "source_section",
+                    "source_quote",
+                    "confidence",
+                    "evidence",
                 ],
             },
         }
     },
     "required": ["requirements"],
+}
+
+
+REQUIREMENT_ANALYSIS_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "analyses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "perspective": {"type": "string"},
+                    "findings": {"type": "array", "items": {"type": "string"}},
+                    "risks": {"type": "array", "items": {"type": "string"}},
+                    "open_questions": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["perspective", "findings", "risks", "open_questions"],
+            },
+        },
+        "contradictions": {"type": "array", "items": {"type": "string"}},
+        "missing_policies": {"type": "array", "items": {"type": "string"}},
+        "untestable_items": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["analyses", "contradictions", "missing_policies", "untestable_items"],
 }
 
 
@@ -242,11 +344,19 @@ TESTCASE_GENERATION_JSON_SCHEMA: dict[str, Any] = {
                     "priority": {"type": "string"},
                     "test_type": {"type": "string"},
                     "title": {"type": "string"},
+                    "test_screen": {"type": "string"},
                     "preconditions": {"type": "array", "items": {"type": "string"}},
                     "steps": {"type": "array", "items": {"type": "string"}},
                     "test_data": {"type": "string"},
                     "expected_result": {"type": "string"},
                     "notes": {"type": "string"},
+                    "category": {"type": "string"},
+                    "severity": {"type": "string"},
+                    "automation_candidate": {"type": "boolean"},
+                    "related_risks": {"type": "array", "items": {"type": "string"}},
+                    "traceability": {"type": "array", "items": {"type": "string"}},
+                    "source_quote": {"type": "string"},
+                    "quality_warnings": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": [
                     "testcase_id",
@@ -255,11 +365,19 @@ TESTCASE_GENERATION_JSON_SCHEMA: dict[str, Any] = {
                     "priority",
                     "test_type",
                     "title",
+                    "test_screen",
                     "preconditions",
                     "steps",
                     "test_data",
                     "expected_result",
                     "notes",
+                    "category",
+                    "severity",
+                    "automation_candidate",
+                    "related_risks",
+                    "traceability",
+                    "source_quote",
+                    "quality_warnings",
                 ],
             },
         }
@@ -312,6 +430,9 @@ def _rule_based_requirement_extraction(document_text: str) -> list[dict[str, Any
                 "dependencies": dependencies[:5],
                 "open_questions": ["세부 정책/예외 케이스 추가 확인 필요"],
                 "source_section": feature_name,
+                "source_quote": feature_name,
+                "confidence": 0.55,
+                "evidence": [feature_name],
             }
         )
 
@@ -389,6 +510,53 @@ def _extract_business_rules(lines: list[str]) -> list[str]:
     return matched[:10]
 
 
+def _rule_based_requirement_analysis(
+    requirements: list[Requirement],
+) -> dict[str, Any]:
+    all_open_questions = []
+    dependency_risks = []
+    state_risks = []
+
+    for requirement in requirements:
+        all_open_questions.extend(requirement.open_questions)
+
+        if requirement.dependencies:
+            dependency_risks.append(
+                f"{requirement.feature_id} {requirement.feature_name}: 의존 요소 연동 확인 필요"
+            )
+
+        if requirement.states:
+            state_risks.append(
+                f"{requirement.feature_id} {requirement.feature_name}: 상태별 전이/표시 확인 필요"
+            )
+
+    return {
+        "analyses": [
+            {
+                "perspective": "PM",
+                "findings": ["요구사항별 정책과 노출 조건을 테스트 기준으로 검토 필요"],
+                "risks": ["세부 정책이 부족하면 기대 결과가 추상화될 수 있음"],
+                "open_questions": _dedupe(all_open_questions),
+            },
+            {
+                "perspective": "DEV",
+                "findings": ["API, 상태값, 데이터 의존성을 테스트 데이터로 명시 필요"],
+                "risks": dependency_risks,
+                "open_questions": [],
+            },
+            {
+                "perspective": "QA",
+                "findings": ["정상, 예외, 상태 전이 케이스를 분리해 작성 필요"],
+                "risks": state_risks,
+                "open_questions": [],
+            },
+        ],
+        "contradictions": [],
+        "missing_policies": _dedupe(all_open_questions),
+        "untestable_items": [],
+    }
+
+
 def _extract_states(lines: list[str]) -> list[str]:
     keywords = ["상태", "대기", "완료", "취소", "실패", "성공", "예약확정", "예약가능", "예약불가"]
     matched: list[str] = []
@@ -429,11 +597,19 @@ def _rule_based_testcase_generation(
                     "priority": _guess_priority(requirement, perspective_upper),
                     "test_type": _guess_test_type(requirement, perspective_upper),
                     "title": _build_testcase_title(requirement, perspective_upper),
+                    "test_screen": _build_test_screen(requirement),
                     "preconditions": requirement.preconditions,
                     "steps": _build_test_steps(requirement, perspective_upper),
                     "test_data": _build_test_data(requirement),
                     "expected_result": _build_expected_result(requirement, perspective_upper),
                     "notes": _build_notes(requirement),
+                    "category": _guess_category(requirement, perspective_upper),
+                    "severity": _guess_severity(requirement),
+                    "automation_candidate": perspective_upper in {"DEV", "QA"},
+                    "related_risks": _build_related_risks(requirement, perspective_upper),
+                    "traceability": _build_traceability(requirement),
+                    "source_quote": requirement.source_quote,
+                    "quality_warnings": [],
                 }
             )
             counter += 1
@@ -464,6 +640,36 @@ def _guess_test_type(requirement: Requirement, perspective: str) -> str:
     return "Functional"
 
 
+def _guess_category(requirement: Requirement, perspective: str) -> str:
+    if perspective == "PM":
+        return "정책"
+
+    if "권한" in requirement.feature_name or any("권한" in rule for rule in requirement.business_rules):
+        return "권한"
+
+    if requirement.states:
+        return "상태전이"
+
+    if requirement.dependencies and perspective == "DEV":
+        return "API"
+
+    return "정상/예외"
+
+
+def _guess_severity(requirement: Requirement) -> str:
+    critical_keywords = ["결제", "인증", "권한", "삭제"]
+    major_keywords = ["로그인", "예약", "저장", "수정", "오류"]
+    text = f"{requirement.feature_name} {' '.join(requirement.business_rules)}"
+
+    if any(keyword in text for keyword in critical_keywords):
+        return "Critical"
+
+    if any(keyword in text for keyword in major_keywords):
+        return "Major"
+
+    return "Medium"
+
+
 def _build_testcase_title(requirement: Requirement, perspective: str) -> str:
     suffix_by_perspective = {
         "PM": "정책/기획 의도 충족 여부 확인",
@@ -472,6 +678,16 @@ def _build_testcase_title(requirement: Requirement, perspective: str) -> str:
     }
     suffix = suffix_by_perspective.get(perspective, "동작 확인")
     return f"{requirement.feature_name} - {suffix}"
+
+
+def _build_test_screen(requirement: Requirement) -> str:
+    if requirement.entry_point:
+        return requirement.entry_point
+
+    if requirement.source_section:
+        return requirement.source_section
+
+    return requirement.feature_name
 
 
 def _build_test_steps(requirement: Requirement, perspective: str) -> list[str]:
@@ -520,3 +736,37 @@ def _build_notes(requirement: Requirement) -> str:
         return "확인 필요: " + " / ".join(requirement.open_questions)
 
     return ""
+
+
+def _build_related_risks(requirement: Requirement, perspective: str) -> list[str]:
+    risks = []
+
+    if requirement.dependencies:
+        risks.append("의존 API/데이터 불일치 리스크")
+
+    if requirement.states:
+        risks.append("상태값별 노출/처리 누락 리스크")
+
+    if perspective == "PM" and requirement.open_questions:
+        risks.append("정책 미확정으로 기대 결과가 변경될 리스크")
+
+    return risks
+
+
+def _build_traceability(requirement: Requirement) -> list[str]:
+    values = [requirement.feature_id]
+    values.extend(requirement.evidence[:3])
+    return _dedupe(values)
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+
+    return deduped

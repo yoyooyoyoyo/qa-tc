@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from app.core.exporter import testcases_to_tsv, testcases_to_xlsx
 from app.core.extractor import extract_requirements_from_text
 from app.core.parser import parse_file
+from app.core.requirement_analyzer import analyze_requirements
 from app.core.testcase_generator import generate_testcases_from_requirements
 from app.schemas.requirement import ExtractRequirementsResponse
 from app.schemas.testcase import (
@@ -187,15 +188,18 @@ def extract_requirements_local(filename: str):
 )
 def generate_testcases(request: TestCaseGenerationRequest):
     try:
+        analysis = analyze_requirements(request.requirements)
         testcases = generate_testcases_from_requirements(
             requirements=request.requirements,
             perspectives=request.perspectives,
+            analysis=analysis,
         )
 
         return GenerateTestCasesResponse(
             message="Testcases generated successfully",
             requirement_count=len(request.requirements),
             testcase_count=len(testcases),
+            analysis=analysis,
             testcases=testcases,
         )
     except ValueError as exc:
@@ -231,9 +235,11 @@ async def generate_testcases_from_document(
         filename, parsed_text = _load_extract_source(file=file, text=text)
         selected_perspectives = _parse_perspectives(perspectives)
         requirements = extract_requirements_from_text(parsed_text)
+        analysis = analyze_requirements(requirements)
         testcases = generate_testcases_from_requirements(
             requirements=requirements,
             perspectives=selected_perspectives,
+            analysis=analysis,
         )
 
         return GenerateTestCasesFromDocumentResponse(
@@ -242,6 +248,7 @@ async def generate_testcases_from_document(
             text_length=len(parsed_text),
             requirement_count=len(requirements),
             testcase_count=len(testcases),
+            analysis=analysis,
             requirements=requirements,
             testcases=testcases,
         )
@@ -439,9 +446,11 @@ def _generate_testcases_from_source(
 ):
     _, parsed_text = _load_extract_source(file=file, text=text)
     requirements = extract_requirements_from_text(parsed_text)
+    analysis = analyze_requirements(requirements)
     return generate_testcases_from_requirements(
         requirements=requirements,
         perspectives=_parse_perspectives(perspectives),
+        analysis=analysis,
     )
 
 
