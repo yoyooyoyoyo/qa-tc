@@ -4,11 +4,19 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 
+from app.core.exporter import testcases_to_tsv, testcases_to_xlsx
 from app.core.extractor import extract_requirements_from_text
 from app.core.parser import parse_file
+from app.core.testcase_generator import generate_testcases_from_requirements
 from app.schemas.requirement import ExtractRequirementsResponse
+from app.schemas.testcase import (
+    ExportTestCasesRequest,
+    GenerateTestCasesFromDocumentResponse,
+    GenerateTestCasesResponse,
+    TestCaseGenerationRequest,
+)
 
 app = FastAPI(title="QA TC Agent")
 
@@ -106,24 +114,23 @@ def parse_local_file(filename: str):
     "/extract-requirements",
     response_model=ExtractRequirementsResponse,
 )
-async def upload_and_extract_requirements(file: UploadFile = File(...)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Filename is missing.")
-
-    extension = Path(file.filename).suffix.lower()
-    saved_name = f"{uuid4().hex}{extension}"
-    saved_path = INPUT_DIR / saved_name
-
+async def upload_and_extract_requirements(
+    file: UploadFile | None = File(
+        default=None,
+        description="분석할 기획서 파일(txt, md, pdf, docx, xlsx, xls)",
+    ),
+    text: str | None = Form(
+        default=None,
+        description="파일 대신 바로 분석할 기획서 텍스트",
+    ),
+):
     try:
-        with saved_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        parsed_text = parse_file(saved_path)
+        filename, parsed_text = _load_extract_source(file=file, text=text)
         requirements = extract_requirements_from_text(parsed_text)
 
         return ExtractRequirementsResponse(
-            message="File uploaded, parsed, and requirements extracted successfully",
-            filename=file.filename,
+            message="Requirements extracted successfully",
+            filename=filename,
             text_length=len(parsed_text),
             requirement_count=len(requirements),
             requirements=requirements,
@@ -138,7 +145,8 @@ async def upload_and_extract_requirements(file: UploadFile = File(...)):
             detail=f"Requirement extraction failed: {exc}",
         ) from exc
     finally:
-        file.file.close()
+        if file is not None:
+            file.file.close()
 
 
 @app.get(
@@ -171,3 +179,290 @@ def extract_requirements_local(filename: str):
             status_code=500,
             detail=f"Requirement extraction failed: {exc}",
         ) from exc
+
+
+@app.post(
+    "/generate-testcases",
+    response_model=GenerateTestCasesResponse,
+)
+def generate_testcases(request: TestCaseGenerationRequest):
+    try:
+        testcases = generate_testcases_from_requirements(
+            requirements=request.requirements,
+            perspectives=request.perspectives,
+        )
+
+        return GenerateTestCasesResponse(
+            message="Testcases generated successfully",
+            requirement_count=len(request.requirements),
+            testcase_count=len(testcases),
+            testcases=testcases,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Testcase generation failed: {exc}",
+        ) from exc
+
+
+@app.post(
+    "/generate-testcases-from-document",
+    response_model=GenerateTestCasesFromDocumentResponse,
+)
+async def generate_testcases_from_document(
+    file: UploadFile | None = File(
+        default=None,
+        description="분석할 기획서 파일(txt, md, pdf, docx, xlsx, xls)",
+    ),
+    text: str | None = Form(
+        default=None,
+        description="파일 대신 바로 분석할 기획서 텍스트",
+    ),
+    perspectives: str = Form(
+        default="PM,DEV,QA",
+        description="쉼표로 구분한 테스트케이스 생성 관점",
+    ),
+):
+    try:
+        filename, parsed_text = _load_extract_source(file=file, text=text)
+        selected_perspectives = _parse_perspectives(perspectives)
+        requirements = extract_requirements_from_text(parsed_text)
+        testcases = generate_testcases_from_requirements(
+            requirements=requirements,
+            perspectives=selected_perspectives,
+        )
+
+        return GenerateTestCasesFromDocumentResponse(
+            message="Requirements extracted and testcases generated successfully",
+            filename=filename,
+            text_length=len(parsed_text),
+            requirement_count=len(requirements),
+            testcase_count=len(testcases),
+            requirements=requirements,
+            testcases=testcases,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document testcase generation failed: {exc}",
+        ) from exc
+    finally:
+        if file is not None:
+            file.file.close()
+
+
+@app.post("/export-testcases-tsv")
+def export_testcases_tsv(request: ExportTestCasesRequest):
+    try:
+        tsv_content = testcases_to_tsv(request.testcases)
+        filename = _safe_export_filename(request.filename, "tsv")
+
+        return Response(
+            content=tsv_content,
+            media_type="text/tab-separated-values; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"TSV export failed: {exc}",
+        ) from exc
+
+
+@app.post("/export-testcases-xlsx")
+def export_testcases_xlsx(request: ExportTestCasesRequest):
+    try:
+        xlsx_content = testcases_to_xlsx(request.testcases)
+        filename = _safe_export_filename(request.filename, "xlsx")
+
+        return Response(
+            content=xlsx_content,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"XLSX export failed: {exc}",
+        ) from exc
+
+
+@app.post("/export-testcases-from-document-tsv")
+async def export_testcases_from_document_tsv(
+    file: UploadFile | None = File(
+        default=None,
+        description="분석할 기획서 파일(txt, md, pdf, docx, xlsx, xls)",
+    ),
+    text: str | None = Form(
+        default=None,
+        description="파일 대신 바로 분석할 기획서 텍스트",
+    ),
+    perspectives: str = Form(
+        default="PM,DEV,QA",
+        description="쉼표로 구분한 테스트케이스 생성 관점",
+    ),
+    filename: str = Form(
+        default="testcases",
+        description="확장자를 제외한 다운로드 파일명",
+    ),
+):
+    try:
+        testcases = _generate_testcases_from_source(
+            file=file,
+            text=text,
+            perspectives=perspectives,
+        )
+        tsv_content = testcases_to_tsv(testcases)
+        export_filename = _safe_export_filename(filename, "tsv")
+
+        return Response(
+            content=tsv_content,
+            media_type="text/tab-separated-values; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{export_filename}"',
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document TSV export failed: {exc}",
+        ) from exc
+    finally:
+        if file is not None:
+            file.file.close()
+
+
+@app.post("/export-testcases-from-document-xlsx")
+async def export_testcases_from_document_xlsx(
+    file: UploadFile | None = File(
+        default=None,
+        description="분석할 기획서 파일(txt, md, pdf, docx, xlsx, xls)",
+    ),
+    text: str | None = Form(
+        default=None,
+        description="파일 대신 바로 분석할 기획서 텍스트",
+    ),
+    perspectives: str = Form(
+        default="PM,DEV,QA",
+        description="쉼표로 구분한 테스트케이스 생성 관점",
+    ),
+    filename: str = Form(
+        default="testcases",
+        description="확장자를 제외한 다운로드 파일명",
+    ),
+):
+    try:
+        testcases = _generate_testcases_from_source(
+            file=file,
+            text=text,
+            perspectives=perspectives,
+        )
+        xlsx_content = testcases_to_xlsx(testcases)
+        export_filename = _safe_export_filename(filename, "xlsx")
+
+        return Response(
+            content=xlsx_content,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            headers={
+                "Content-Disposition": f'attachment; filename="{export_filename}"',
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document XLSX export failed: {exc}",
+        ) from exc
+    finally:
+        if file is not None:
+            file.file.close()
+
+
+def _load_extract_source(
+    *,
+    file: UploadFile | None,
+    text: str | None,
+) -> tuple[str, str]:
+    if text and text.strip():
+        return "inline-text", text.strip()
+
+    if file is None:
+        raise ValueError("Either file or text is required.")
+
+    if not file.filename:
+        raise ValueError("Filename is missing.")
+
+    extension = Path(file.filename).suffix.lower()
+    saved_name = f"{uuid4().hex}{extension}"
+    saved_path = INPUT_DIR / saved_name
+
+    with saved_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return file.filename, parse_file(saved_path)
+
+
+def _generate_testcases_from_source(
+    *,
+    file: UploadFile | None,
+    text: str | None,
+    perspectives: str,
+):
+    _, parsed_text = _load_extract_source(file=file, text=text)
+    requirements = extract_requirements_from_text(parsed_text)
+    return generate_testcases_from_requirements(
+        requirements=requirements,
+        perspectives=_parse_perspectives(perspectives),
+    )
+
+
+def _parse_perspectives(perspectives: str) -> list[str]:
+    parsed = [
+        perspective.strip().upper()
+        for perspective in perspectives.split(",")
+        if perspective.strip()
+    ]
+
+    if not parsed:
+        raise ValueError("At least one perspective is required.")
+
+    return parsed
+
+
+def _safe_export_filename(filename: str, extension: str) -> str:
+    stem = Path(filename).stem or "testcases"
+    safe_stem = "".join(
+        char if char.isalnum() or char in {"-", "_"} else "_"
+        for char in stem
+    ).strip("_")
+
+    return f"{safe_stem or 'testcases'}.{extension}"

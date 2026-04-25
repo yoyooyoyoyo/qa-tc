@@ -17,6 +17,13 @@ class Requirement(BaseModel):
     source_section: str = Field(default="", description="원문 내 섹션명")
 
 
+class RequirementExtractionResult(BaseModel):
+    requirements: list[Requirement] = Field(
+        default_factory=list,
+        description="기획서에서 추출한 테스트 가능 요구사항 목록",
+    )
+
+
 class ExtractRequirementsResponse(BaseModel):
     message: str
     filename: str
