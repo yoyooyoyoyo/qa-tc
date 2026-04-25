@@ -8,9 +8,12 @@ from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 
 from app.core.exporter import testcases_to_tsv, testcases_to_xlsx
 from app.core.extractor import extract_requirements_from_text
+from app.core.figma_parser import extract_figma_context, figma_context_to_prompt_text
 from app.core.parser import parse_file
 from app.core.requirement_analyzer import analyze_requirements
 from app.core.testcase_generator import generate_testcases_from_requirements
+from app.schemas.figma import ExtractFigmaContextResponse
+from app.schemas.figma import FigmaContext
 from app.schemas.requirement import ExtractRequirementsResponse
 from app.schemas.testcase import (
     ExportTestCasesRequest,
@@ -34,6 +37,34 @@ def read_root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post(
+    "/extract-figma-context",
+    response_model=ExtractFigmaContextResponse,
+)
+def extract_figma_context_api(
+    figma_url: str = Form(..., description="Figma file/frame URL"),
+    include_images: bool = Form(default=False),
+    max_screens: int = Form(default=30),
+):
+    try:
+        context = extract_figma_context(
+            figma_url,
+            include_images=include_images,
+            max_screens=max_screens,
+        )
+        return ExtractFigmaContextResponse(
+            message="Figma context extracted successfully",
+            context=context,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Figma context extraction failed: {exc}",
+        ) from exc
 
 
 @app.post("/upload")
@@ -230,16 +261,37 @@ async def generate_testcases_from_document(
         default="PM,DEV,QA",
         description="쉼표로 구분한 테스트케이스 생성 관점",
     ),
+    figma_url: str | None = Form(
+        default=None,
+        description="선택: Figma file/frame URL",
+    ),
+    figma_context: str | None = Form(
+        default=None,
+        description="선택: Figma MCP 등에서 추출한 화면/텍스트 컨텍스트",
+    ),
+    include_figma_images: bool = Form(
+        default=False,
+        description="선택: Figma frame 이미지 URL도 함께 추출",
+    ),
 ):
     try:
         filename, parsed_text = _load_extract_source(file=file, text=text)
         selected_perspectives = _parse_perspectives(perspectives)
         requirements = extract_requirements_from_text(parsed_text)
         analysis = analyze_requirements(requirements)
+        figma_api_context = _load_figma_context(
+            figma_url=figma_url,
+            include_images=include_figma_images,
+        )
+        figma_prompt_context = _build_figma_prompt_context(
+            figma_context=figma_api_context,
+            figma_context_text=figma_context,
+        )
         testcases = generate_testcases_from_requirements(
             requirements=requirements,
             perspectives=selected_perspectives,
             analysis=analysis,
+            figma_context=figma_prompt_context,
         )
 
         return GenerateTestCasesFromDocumentResponse(
@@ -249,6 +301,7 @@ async def generate_testcases_from_document(
             requirement_count=len(requirements),
             testcase_count=len(testcases),
             analysis=analysis,
+            figma_context=figma_api_context,
             requirements=requirements,
             testcases=testcases,
         )
@@ -329,12 +382,22 @@ async def export_testcases_from_document_tsv(
         default="testcases",
         description="확장자를 제외한 다운로드 파일명",
     ),
+    figma_url: str | None = Form(
+        default=None,
+        description="선택: Figma file/frame URL",
+    ),
+    figma_context: str | None = Form(
+        default=None,
+        description="선택: Figma MCP 등에서 추출한 화면/텍스트 컨텍스트",
+    ),
 ):
     try:
         testcases = _generate_testcases_from_source(
             file=file,
             text=text,
             perspectives=perspectives,
+            figma_url=figma_url,
+            figma_context=figma_context,
         )
         tsv_content = testcases_to_tsv(testcases)
         export_filename = _safe_export_filename(filename, "tsv")
@@ -378,12 +441,22 @@ async def export_testcases_from_document_xlsx(
         default="testcases",
         description="확장자를 제외한 다운로드 파일명",
     ),
+    figma_url: str | None = Form(
+        default=None,
+        description="선택: Figma file/frame URL",
+    ),
+    figma_context: str | None = Form(
+        default=None,
+        description="선택: Figma MCP 등에서 추출한 화면/텍스트 컨텍스트",
+    ),
 ):
     try:
         testcases = _generate_testcases_from_source(
             file=file,
             text=text,
             perspectives=perspectives,
+            figma_url=figma_url,
+            figma_context=figma_context,
         )
         xlsx_content = testcases_to_xlsx(testcases)
         export_filename = _safe_export_filename(filename, "xlsx")
@@ -443,14 +516,67 @@ def _generate_testcases_from_source(
     file: UploadFile | None,
     text: str | None,
     perspectives: str,
+    figma_url: str | None = None,
+    figma_context: str | None = None,
 ):
     _, parsed_text = _load_extract_source(file=file, text=text)
     requirements = extract_requirements_from_text(parsed_text)
     analysis = analyze_requirements(requirements)
+    figma_prompt_context = _load_figma_prompt_context(
+        figma_url=figma_url,
+        figma_context_text=figma_context,
+    )
     return generate_testcases_from_requirements(
         requirements=requirements,
         perspectives=_parse_perspectives(perspectives),
         analysis=analysis,
+        figma_context=figma_prompt_context,
+    )
+
+
+def _load_figma_prompt_context(
+    *,
+    figma_url: str | None,
+    figma_context_text: str | None = None,
+    include_images: bool = False,
+) -> str:
+    context = _load_figma_context(
+        figma_url=figma_url,
+        include_images=include_images,
+    )
+    return _build_figma_prompt_context(
+        figma_context=context,
+        figma_context_text=figma_context_text,
+    )
+
+
+def _build_figma_prompt_context(
+    *,
+    figma_context: FigmaContext | None,
+    figma_context_text: str | None,
+) -> str:
+    parts: list[str] = []
+
+    if figma_context_text and figma_context_text.strip():
+        parts.append(figma_context_text.strip())
+
+    if figma_context:
+        parts.append(figma_context_to_prompt_text(figma_context))
+
+    return "\n\n".join(parts)
+
+
+def _load_figma_context(
+    *,
+    figma_url: str | None,
+    include_images: bool = False,
+) -> FigmaContext | None:
+    if not figma_url or not figma_url.strip():
+        return None
+
+    return extract_figma_context(
+        figma_url.strip(),
+        include_images=include_images,
     )
 
 

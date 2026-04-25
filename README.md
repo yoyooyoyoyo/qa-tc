@@ -53,6 +53,58 @@ uvicorn app.main:app --reload
 
 Swagger: `http://127.0.0.1:8000/docs`
 
+Figma 연결:
+
+```bash
+export FIGMA_ACCESS_TOKEN=...
+```
+
+Figma token은 repo에 커밋하지 말고 환경변수 또는 `.env`로만 관리한다.
+
+## Figma Context API
+
+`POST /extract-figma-context`
+
+Figma file/frame URL을 넣으면 화면명, frame 경로, 텍스트 레이어를 추출한다.
+
+- `figma_url`: Figma file/frame URL
+- `include_images`: frame 이미지 URL 포함 여부
+- `max_screens`: 추출할 최대 화면 수
+
+Figma URL은 다음 정보를 포함할 수 있다.
+
+```text
+https://www.figma.com/design/{file_key}/{file_name}?node-id=1-2
+```
+
+`/generate-testcases-from-document`, `/export-testcases-from-document-tsv`, `/export-testcases-from-document-xlsx`에서도 선택값으로 `figma_url`을 넣을 수 있다. 이 경우 Figma의 화면명/텍스트 레이어가 `test_screen`, `steps`, `expected result` 생성에 참고된다.
+
+Figma MCP를 사용하는 경우에는 Figma API token 없이도 MCP가 추출한 화면 정보를 `figma_context` 필드에 직접 넣을 수 있다.
+
+예시:
+
+```text
+Figma file: 기업검진
+
+Screens:
+- 기업검진 > 종합검진 목록
+  texts: 종합검진 / 예약하기 / 검진기관 / 필터
+- 기업검진 > 종합검진 상세
+  texts: 검진 항목 / 병원 정보 / 예약 신청
+```
+
+이 값을 `/generate-testcases-from-document` 또는 `/export-testcases-from-document-xlsx`의 `figma_context`에 넣으면 `테스트 진행 화면`, `steps`, `expected result` 생성에 참고된다.
+
+## Company Policy Context
+
+회사 QA 정책과 테스트케이스 작성 규칙은 `docs/policies`에 Markdown으로 관리한다.
+
+- `docs/policies/qa_policy.md`: QA 범위, 테스트 유형, 우선순위 기준
+- `docs/policies/testcase_style_guide.md`: title, precondition, steps, expected result 작성 규칙
+- `docs/policies/domain_terms.md`: 서비스 용어, 화면 경로, 상태값 정의
+- `docs/policies/defect_policy.md`: pass/fail/blocked/fixed 및 이슈 등록 기준
+- `docs/policies/release_checklist.md`: 배포 전 smoke/regression 체크 기준
+
 ## Testcase generation API
 
 `POST /generate-testcases`

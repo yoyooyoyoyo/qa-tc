@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.requirement import Requirement
 from app.schemas.analysis import RequirementAnalysisResult
+from app.schemas.figma import FigmaContext
 
 
 class TestCase(BaseModel):
@@ -55,6 +56,7 @@ class GenerateTestCasesFromDocumentResponse(BaseModel):
     requirement_count: int
     testcase_count: int
     analysis: RequirementAnalysisResult = Field(default_factory=RequirementAnalysisResult)
+    figma_context: FigmaContext | None = None
     requirements: list[Requirement]
     testcases: list[TestCase]
 

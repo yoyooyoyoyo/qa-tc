@@ -10,6 +10,7 @@ def build_testcase_generation_prompt(
     requirements: list[Requirement],
     perspectives: list[str],
     analysis: RequirementAnalysisResult | None = None,
+    figma_context: str = "",
 ) -> str:
     requirement_payload = [
         requirement.model_dump(mode="json") for requirement in requirements
@@ -31,13 +32,18 @@ def build_testcase_generation_prompt(
 4. 동일한 title/steps/expected_result 조합을 반복하지 않는다.
 5. 요구사항의 source_quote/evidence를 traceability와 source_quote에 반영한다.
 6. 추정이 필요한 내용은 notes와 quality_warnings에 확인 필요로 남긴다.
-7. 반드시 JSON만 반환한다. 설명 문장은 쓰지 않는다.
+7. Figma 컨텍스트가 있으면 test_screen에는 가장 가까운 화면 경로를 사용한다.
+8. Figma 텍스트 레이어의 버튼명/라벨/문구는 steps와 expected_result 작성에 참고한다.
+9. 반드시 JSON만 반환한다. 설명 문장은 쓰지 않는다.
 
 관점:
 {json.dumps(perspectives, ensure_ascii=False)}
 
 사전 분석 결과:
 {json.dumps(analysis_payload, ensure_ascii=False, indent=2)}
+
+Figma 화면/디자인 컨텍스트:
+{figma_context or "제공된 Figma 컨텍스트 없음"}
 
 반환 JSON 스키마:
 {{

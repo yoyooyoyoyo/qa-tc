@@ -16,6 +16,7 @@ def generate_testcases_from_requirements(
     requirements: list[Requirement],
     perspectives: list[str] | None = None,
     analysis: RequirementAnalysisResult | None = None,
+    figma_context: str = "",
     llm_client: BaseLLMClient | None = None,
 ) -> list[TestCase]:
     if not requirements:
@@ -26,6 +27,7 @@ def generate_testcases_from_requirements(
         requirements,
         selected_perspectives,
         analysis=analysis,
+        figma_context=figma_context,
     )
 
     client = llm_client or get_llm_client()
