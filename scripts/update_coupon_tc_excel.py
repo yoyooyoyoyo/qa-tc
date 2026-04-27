@@ -233,55 +233,6 @@ APP_TCS = [
      D1, "예외 케이스", "발급만료+보유유효", ""),
 ]
 
-# Web TC (핵심 케이스만 - App TC와 동일 로직, Web 플랫폼 기준)
-WEB_TCS = [
-    (1,  "High",   "Web", "검진상세 진입 시 다운로드 가능한 쿠폰이 있으면 쿠폰 카드가 노출되는지 확인",
-     D1, "UI 기본 노출", "쿠폰 카드 위치", ""),
-    (2,  "High",   "Web", "다운로드 전 쿠폰 카드에 쿠폰명과 금액 정보가 노출되는지 확인",
-     D1, "UI 기본 노출", "카드 정보 노출", ""),
-    (3,  "High",   "Web", "다운로드 전 쿠폰 카드에 '쿠폰받기' 버튼이 활성화 상태로 노출되는지 확인",
-     D1, "다운로드 전 상태", "쿠폰받기 버튼", ""),
-    (4,  "High",   "Web", "쿠폰 다운로드 시 '쿠폰받기' 버튼이 '[최대 할인 적용중]' 뱃지로 전환되는지 확인",
-     D1, "보유중 상태", "버튼→뱃지 전환", ""),
-    (5,  "High",   "Web", "보유중 쿠폰 카드에 '[최대 할인 적용중]' 뱃지가 노출되고 '쿠폰받기' 버튼은 없는지 확인",
-     D1, "보유중 상태", "[최대 할인 적용중] 뱃지", "다운로드쿠폰"),
-    (6,  "High",   "Web", "코드쿠폰 보유중 상태에서 쿠폰 카드가 보유중 UI로 노출되는지 확인",
-     D1, "보유중 상태", "[최대 할인 적용중] 뱃지", "코드쿠폰"),
-    (7,  "High",   "Web", "[케이스①-a] 보유한 다운로드쿠폰 금액 > 보유한 코드쿠폰 금액 → 보유 다운로드쿠폰 노출 확인",
-     D1, "노출 우선순위", "금액 비교", "보유DL > 보유코드"),
-    (8,  "High",   "Web", "[케이스①-b] 미보유 다운로드쿠폰 금액 > 보유한 코드쿠폰 금액 → 미보유 다운로드쿠폰 노출 확인",
-     D1, "노출 우선순위", "금액 비교", "미보유DL > 보유코드"),
-    (9,  "High",   "Web", "[케이스②-a] 보유한 다운로드쿠폰 금액 < 보유한 코드쿠폰 금액 → 코드쿠폰 노출 확인",
-     D1, "노출 우선순위", "금액 비교", "보유DL < 보유코드"),
-    (10, "High",   "Web", "[케이스②-b] 미보유 다운로드쿠폰 금액 < 보유한 코드쿠폰 금액 → 코드쿠폰 노출 확인",
-     D1, "노출 우선순위", "금액 비교", "미보유DL < 보유코드"),
-    (11, "High",   "Web", "[케이스③] 보유 다운로드·코드쿠폰 금액 동일, 종료일 다름 → 종료일 빠른 쿠폰 노출 확인",
-     D1, "노출 우선순위", "사용종료일 비교", ""),
-    (12, "High",   "Web", "[케이스④] 보유 다운로드·코드쿠폰 금액·종료일 모두 동일 → 코드쿠폰 우선 노출 확인",
-     D1, "노출 우선순위", "코드쿠폰 우선", ""),
-    (13, "High",   "Web", "[hide-1] 다운로드쿠폰 없음 + 코드쿠폰 없음 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "DL없음 기준", "코드쿠폰X"),
-    (14, "High",   "Web", "[hide-2] 다운로드쿠폰 없음 + 코드쿠폰 발급 수량 소진 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "DL없음 기준", "코드쿠폰 발급수량소진"),
-    (15, "High",   "Web", "[hide-3] 다운로드쿠폰 없음 + 코드쿠폰 발급 기간 만료 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "DL없음 기준", "코드쿠폰 발급기간만료"),
-    (16, "High",   "Web", "[hide-4] 다운로드쿠폰 없음 + 코드쿠폰 사용 기간 만료 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "DL없음 기준", "코드쿠폰 사용기간만료"),
-    (17, "High",   "Web", "[hide-5] 코드쿠폰 없음 + 다운로드쿠폰 발급 수량 소진 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "코드쿠폰X 기준", "DL 발급수량소진"),
-    (18, "High",   "Web", "[hide-6] 코드쿠폰 없음 + 다운로드쿠폰 발급 기간 만료 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "코드쿠폰X 기준", "DL 발급기간만료"),
-    (19, "High",   "Web", "[hide-7] 코드쿠폰 없음 + 다운로드쿠폰 사용 기간 만료 → 쿠폰 영역 전체 hide 확인",
-     D1, "쿠폰 영역 hide", "코드쿠폰X 기준", "DL 사용기간만료"),
-    (20, "High",   "Web", "다운로드쿠폰 미운영이더라도 유효한 코드쿠폰 보유 시 쿠폰 카드가 노출되는지 확인",
-     D1, "쿠폰 영역 hide", "hide 비적용 케이스", "코드쿠폰 유효"),
-    (21, "Medium", "Web", "쿠폰 대상이 아닌 상품에서 쿠폰 카드가 노출되지 않는지 확인",
-     D1, "예외 케이스", "쿠폰 미대상", ""),
-    (22, "High",   "Web", "비로그인 상태에서 검진상세 진입 시 쿠폰 카드 노출 여부 확인",
-     D1, "예외 케이스", "비로그인", ""),
-    (23, "High",   "Web", "보유 다운로드쿠폰의 사용기간이 만료된 경우 해당 쿠폰이 비교 대상에서 제외되는지 확인",
-     D1, "예외 케이스", "사용기간 만료 쿠폰", "DL쿠폰"),
-]
 
 # App TC 중 precondition/step/result/comment 가 짧게만 정의된 것들 보완
 APP_DETAIL = {
@@ -421,39 +372,40 @@ APP_DETAIL = {
 
 
 def write_sheet(ws, tc_list, detail_map, is_app=True):
-    """템플릿 시트에 TC 데이터를 작성한다."""
-    wrap = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    """템플릿 시트에 TC 데이터를 작성한다.
+
+    App 컬럼: B=No, C=Priority, D=Title, E=1depth, F=2depth, G=3depth, H=4depth,
+              I=Pre, J=Step, K=Result, L=And Status, M=iOS Status, N=Comment, O=Issue
+    Web 컬럼: B=No, C=Priority, D=Platform, E=Title, F=1depth, G=2depth, H=3depth,
+              I=4depth, J=Pre, K=Step, L=Result, M=Status, N=Comment, O=Issue
+    """
+    wrap   = Alignment(horizontal="left",   vertical="top", wrap_text=True)
     center = Alignment(horizontal="center", vertical="top", wrap_text=True)
 
     for i, tc in enumerate(tc_list):
         row = DATA_START_ROW + i
         ws.row_dimensions[row].height = 90
 
-        if is_app:
-            no, priority, title, d1, d2, d3, d4 = tc[:7]
-            detail = detail_map.get(no, {})
-            pre     = detail.get("pre",     tc[7]  if len(tc) > 7  else "")
-            step    = detail.get("step",    tc[8]  if len(tc) > 8  else "")
-            result  = detail.get("result",  tc[9]  if len(tc) > 9  else "")
-            comment = detail.get("comment", tc[10] if len(tc) > 10 else "")
+        no, priority, title, d1, d2, d3, d4 = tc[:7]
+        detail  = detail_map.get(no, {})
+        pre     = detail.get("pre",     tc[7]  if len(tc) > 7  else "")
+        step    = detail.get("step",    tc[8]  if len(tc) > 8  else "")
+        result  = detail.get("result",  tc[9]  if len(tc) > 9  else "")
+        comment = detail.get("comment", tc[10] if len(tc) > 10 else "")
 
-            # App 컬럼: B=No, C=Priority, D=Title, E=1depth, F=2depth, G=3depth, H=4depth,
-            #           I=Pre, J=Step, K=Result, L=And Status, M=iOS Status, N=Comment, O=Issue
+        if is_app:
             vals = [no, priority, title, d1, d2, d3, d4, pre, step, result, "", "", comment, ""]
-            cols = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+            cols = [2,  3,        4,     5,  6,  7,  8,  9,  10,   11,     12, 13, 14,      15]
         else:
-            no, priority, platform, title, d1, d2, d3, d4 = tc[:8]
-            # Web 컬럼: B=No, C=Priority, D=Platform, E=Title, F=1depth, G=2depth,
-            #           H=3depth, I=4depth, J=Pre, K=Step, L=Result, M=Status, N=Comment, O=Issue
-            vals = [no, priority, platform, title, d1, d2, d3, d4, "", "", "", "", "", ""]
-            cols = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+            # Web은 D 컬럼에 Platform이 추가되므로 Title 이후 열이 한 칸씩 밀림
+            vals = [no, priority, "Web", title, d1, d2, d3, d4, pre, step, result, "", comment, ""]
+            cols = [2,  3,        4,     5,     6,  7,  8,  9,  10,  11,   12,    13, 14,      15]
 
         for col, val in zip(cols, vals):
             cell = ws.cell(row=row, column=col, value=val)
             cell.alignment = center if col in [2, 3] else wrap
             cell.font = Font(name="Arial", size=9)
 
-        # 행 색상 (짝수행)
         if i % 2 == 1:
             fill = PatternFill("solid", fgColor="F5F5F5")
             for col in cols:
@@ -461,22 +413,19 @@ def write_sheet(ws, tc_list, detail_map, is_app=True):
 
 
 def main():
-    # 템플릿 복사
     shutil.copy(TEMPLATE_PATH, OUTPUT_PATH)
     wb = openpyxl.load_workbook(OUTPUT_PATH)
 
-    # App 시트
     ws_app = wb["App"]
     write_sheet(ws_app, APP_TCS, APP_DETAIL, is_app=True)
 
-    # Web 시트
     ws_web = wb["Web"]
-    write_sheet(ws_web, WEB_TCS, {}, is_app=False)
+    write_sheet(ws_web, APP_TCS, APP_DETAIL, is_app=False)  # 동일 TC, Web 컬럼 구조 적용
 
     wb.save(OUTPUT_PATH)
     print(f"✅ 저장 완료: {OUTPUT_PATH}")
     print(f"   App 탭: {len(APP_TCS)}개 TC")
-    print(f"   Web 탭: {len(WEB_TCS)}개 TC")
+    print(f"   Web 탭: {len(APP_TCS)}개 TC (동일 내용)")
 
 
 if __name__ == "__main__":
