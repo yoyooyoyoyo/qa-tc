@@ -26,6 +26,17 @@ class TestCase(BaseModel):
     related_risks: list[str] = Field(default_factory=list, description="관련 리스크")
     traceability: list[str] = Field(default_factory=list, description="요구사항/정책 근거")
     source_quote: str = Field(default="", description="테스트케이스 근거 원문")
+    source_policy: list[str] = Field(default_factory=list, description="참고한 정책 문서")
+    related_policy: list[str] = Field(default_factory=list, description="관련 정책/규칙")
+    generation_scope: str = Field(
+        default="core-deep",
+        description="생성 범위: core-deep, smoke-only, omitted",
+    )
+    risk_basis: list[str] = Field(
+        default_factory=list,
+        description="리스크 근거: business, data, state, auth, api 등",
+    )
+    omit_reason: str = Field(default="", description="축약/제외 사유")
     quality_warnings: list[str] = Field(default_factory=list, description="후처리 품질 경고")
 
 

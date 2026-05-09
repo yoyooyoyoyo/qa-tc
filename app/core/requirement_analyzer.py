@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from app.core.llm_client import BaseLLMClient, get_llm_client
+from app.core.policy_loader import load_policy_context
 from app.prompts.analysis_prompt import build_requirement_analysis_prompt
 from app.schemas.analysis import RequirementAnalysisResult
 from app.schemas.requirement import Requirement
@@ -12,12 +13,19 @@ from app.schemas.requirement import Requirement
 
 def analyze_requirements(
     requirements: list[Requirement],
+    policy_context: str = "",
     llm_client: BaseLLMClient | None = None,
 ) -> RequirementAnalysisResult:
     if not requirements:
         raise ValueError("requirements is required.")
 
-    prompt = build_requirement_analysis_prompt(requirements)
+    resolved_policy_context = policy_context or load_policy_context(
+        json.dumps([requirement.model_dump(mode="json") for requirement in requirements], ensure_ascii=False)
+    ).text
+    prompt = build_requirement_analysis_prompt(
+        requirements,
+        policy_context=resolved_policy_context,
+    )
     client = llm_client or get_llm_client()
     raw_output = client.analyze_requirements(requirements=requirements, prompt=prompt)
     return RequirementAnalysisResult.model_validate(_normalize_llm_output(raw_output))

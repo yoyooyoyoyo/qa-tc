@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from app.core.llm_client import BaseLLMClient, get_llm_client
+from app.core.policy_loader import load_policy_context
 from app.core.quality import improve_testcase_quality
 from app.prompts.testcase_prompt import build_testcase_generation_prompt
 from app.schemas.analysis import RequirementAnalysisResult
@@ -17,17 +18,27 @@ def generate_testcases_from_requirements(
     perspectives: list[str] | None = None,
     analysis: RequirementAnalysisResult | None = None,
     figma_context: str = "",
+    policy_context: str = "",
     llm_client: BaseLLMClient | None = None,
 ) -> list[TestCase]:
     if not requirements:
         raise ValueError("requirements is required.")
 
     selected_perspectives = perspectives or ["PM", "DEV", "QA"]
+    requirement_context = json.dumps(
+        [requirement.model_dump(mode="json") for requirement in requirements],
+        ensure_ascii=False,
+    )
+    resolved_policy_context = policy_context or load_policy_context(
+        requirement_context,
+        figma_context,
+    ).text
     prompt = build_testcase_generation_prompt(
         requirements,
         selected_perspectives,
         analysis=analysis,
         figma_context=figma_context,
+        policy_context=resolved_policy_context,
     )
 
     client = llm_client or get_llm_client()

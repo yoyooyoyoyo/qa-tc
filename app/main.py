@@ -9,8 +9,11 @@ from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from app.core.exporter import testcases_to_tsv, testcases_to_xlsx
 from app.core.extractor import extract_requirements_from_text
 from app.core.figma_parser import extract_figma_context, figma_context_to_prompt_text
+from app.core.gap_reporter import analysis_to_gap_report_markdown
 from app.core.parser import parse_file
+from app.core.policy_loader import load_policy_context
 from app.core.requirement_analyzer import analyze_requirements
+from app.schemas.analysis import ExportGapReportRequest
 from app.core.testcase_generator import generate_testcases_from_requirements
 from app.schemas.figma import ExtractFigmaContextResponse
 from app.schemas.figma import FigmaContext
@@ -278,7 +281,6 @@ async def generate_testcases_from_document(
         filename, parsed_text = _load_extract_source(file=file, text=text)
         selected_perspectives = _parse_perspectives(perspectives)
         requirements = extract_requirements_from_text(parsed_text)
-        analysis = analyze_requirements(requirements)
         figma_api_context = _load_figma_context(
             figma_url=figma_url,
             include_images=include_figma_images,
@@ -287,11 +289,17 @@ async def generate_testcases_from_document(
             figma_context=figma_api_context,
             figma_context_text=figma_context,
         )
+        policy_context = load_policy_context(parsed_text, figma_prompt_context).text
+        analysis = analyze_requirements(
+            requirements,
+            policy_context=policy_context,
+        )
         testcases = generate_testcases_from_requirements(
             requirements=requirements,
             perspectives=selected_perspectives,
             analysis=analysis,
             figma_context=figma_prompt_context,
+            policy_context=policy_context,
         )
 
         return GenerateTestCasesFromDocumentResponse(
@@ -361,6 +369,29 @@ def export_testcases_xlsx(request: ExportTestCasesRequest):
         raise HTTPException(
             status_code=500,
             detail=f"XLSX export failed: {exc}",
+        ) from exc
+
+
+@app.post("/export-gap-report-md")
+def export_gap_report_md(request: ExportGapReportRequest):
+    try:
+        content = analysis_to_gap_report_markdown(
+            request.analysis,
+            title=request.title,
+        )
+        filename = _safe_export_filename(request.title, "md")
+
+        return Response(
+            content=content,
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gap report export failed: {exc}",
         ) from exc
 
 
@@ -487,6 +518,62 @@ async def export_testcases_from_document_xlsx(
             file.file.close()
 
 
+@app.post("/export-gap-report-from-document-md")
+async def export_gap_report_from_document_md(
+    file: UploadFile | None = File(
+        default=None,
+        description="분석할 기획서 파일(txt, md, pdf, docx, xlsx, xls)",
+    ),
+    text: str | None = Form(
+        default=None,
+        description="파일 대신 바로 분석할 기획서 텍스트",
+    ),
+    filename: str = Form(
+        default="gap_report",
+        description="확장자를 제외한 다운로드 파일명",
+    ),
+    figma_url: str | None = Form(
+        default=None,
+        description="선택: Figma file/frame URL",
+    ),
+    figma_context: str | None = Form(
+        default=None,
+        description="선택: Figma MCP 등에서 추출한 화면/텍스트 컨텍스트",
+    ),
+):
+    try:
+        _, parsed_text = _load_extract_source(file=file, text=text)
+        requirements = extract_requirements_from_text(parsed_text)
+        figma_prompt_context = _load_figma_prompt_context(
+            figma_url=figma_url,
+            figma_context_text=figma_context,
+        )
+        policy_context = load_policy_context(parsed_text, figma_prompt_context).text
+        analysis = analyze_requirements(requirements, policy_context=policy_context)
+        content = analysis_to_gap_report_markdown(analysis)
+        export_filename = _safe_export_filename(filename, "md")
+
+        return Response(
+            content=content,
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{export_filename}"',
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gap report document export failed: {exc}",
+        ) from exc
+    finally:
+        if file is not None:
+            file.file.close()
+
+
 def _load_extract_source(
     *,
     file: UploadFile | None,
@@ -521,16 +608,18 @@ def _generate_testcases_from_source(
 ):
     _, parsed_text = _load_extract_source(file=file, text=text)
     requirements = extract_requirements_from_text(parsed_text)
-    analysis = analyze_requirements(requirements)
     figma_prompt_context = _load_figma_prompt_context(
         figma_url=figma_url,
         figma_context_text=figma_context,
     )
+    policy_context = load_policy_context(parsed_text, figma_prompt_context).text
+    analysis = analyze_requirements(requirements, policy_context=policy_context)
     return generate_testcases_from_requirements(
         requirements=requirements,
         perspectives=_parse_perspectives(perspectives),
         analysis=analysis,
         figma_context=figma_prompt_context,
+        policy_context=policy_context,
     )
 
 
